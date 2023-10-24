@@ -261,13 +261,7 @@ function interpolateColor(startColor, endColor, progress) {
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
-export const animate = function (
-  options,
-  startState,
-  endState,
-  updateFunc,
-  easeFunc
-) {
+const animate = function (options, startState, endState, updateFunc, easeFunc) {
   if (typeof easeFunc === "string") {
     easeFunc = easingFunctions[easeFunc];
   }
@@ -292,9 +286,9 @@ export const animate = function (
     // 计算当前的值
     const currentValues = {};
     for (let key in startState) {
-      if (key.includes("color")) {
+      if (key.toLowerCase().includes("color")) {
         // todo 颜色插值算法 CIEDE2020
-        currentValues = interpolateColor(
+        currentValues[key] = interpolateColor(
           startState[key],
           endState[key],
           progress
