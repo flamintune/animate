@@ -44,7 +44,37 @@ function hslToRgb(h, s, l) {
     b: Math.round(b * 255),
   };
 }
+function rgbaToHsla({ r, g, b, a }) {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  let max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  let h,
+    s,
+    l = (max + min) / 2;
 
+  if (max == min) {
+    h = s = 0; // achromatic
+  } else {
+    let d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+
+  return [h, s, l, a];
+}
 function parseColor(color) {
   // 处理颜色关键字
   const w3cx11 = {
@@ -249,16 +279,17 @@ function parseColor(color) {
 }
 
 function interpolateColor(startColor, endColor, progress) {
-  const startRGB = parseColor(startColor);
-  const endRGB = parseColor(endColor);
+  const startHsla = rgbaToHsla(parseColor(startColor));
+  const endHsla = rgbaToHsla(parseColor(endColor));
 
-  // 计算插值后的 RGB 值
-  const r = Math.round(startRGB.r + progress * (endRGB.r - startRGB.r));
-  const g = Math.round(startRGB.g + progress * (endRGB.g - startRGB.g));
-  const b = Math.round(startRGB.b + progress * (endRGB.b - startRGB.b));
+  // 计算插值后的 HSLA 值
+  const h = startHsla[0] + progress * (endHsla[0] - startHsla[0]);
+  const s = startHsla[1] + progress * (endHsla[1] - startHsla[1]);
+  const l = startHsla[2] + progress * (endHsla[2] - startHsla[2]);
+  const a = startHsla[3] + progress * (endHsla[3] - startHsla[3]);
 
-  // 将 RGB 值转换回颜色字符串
-  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  // 将 HSLA 值转换回颜色字符串
+  return `hsla(${h * 360},${s * 100}%,${l * 100}%,${a})`;
 }
 
 const animate = function (options, startState, endState, updateFunc, easeFunc) {
@@ -287,7 +318,6 @@ const animate = function (options, startState, endState, updateFunc, easeFunc) {
     const currentValues = {};
     for (let key in startState) {
       if (key.toLowerCase().includes("color")) {
-        // todo 颜色插值算法 CIEDE2020
         currentValues[key] = interpolateColor(
           startState[key],
           endState[key],
