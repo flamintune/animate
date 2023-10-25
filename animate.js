@@ -1,3 +1,23 @@
+function convertToCamelCase(str) {
+  return str.replace(/-([a-z])/g, function (match, group1) {
+    return group1.toUpperCase();
+  });
+}
+
+function calculateBezier(t, p1, p2) {
+  const u = 1 - t;
+  const tt = t * t;
+  const uu = u * u;
+  const uuu = uu * u;
+  const ttt = tt * t;
+
+  // const p = [0, 0]
+  // p[0] = uuu * 0 + 3 * uu * t * p1[0] + 3 * u * tt * p2[0] + ttt * 1
+  // p[1] = uuu * 0 + 3 * uu * t * p1[1] + 3 * u * tt * p2[1] + ttt * 1
+
+  return uuu * 0 + 3 * uu * t * p1[1] + 3 * u * tt * p2[1] + ttt * 1;
+}
+
 const easingFunctions = {
   linear: function (progress) {
     return progress;
@@ -15,6 +35,45 @@ const easingFunctions = {
   },
 };
 
+function getEasingFunction(easing) {
+  // 将 easing 转换为驼峰命名
+  const easingCamelCase = convertToCamelCase(easing);
+
+  // 如果 easing 是预定义的缓动函数之一，直接返回对应的函数
+  if (easingFunctions[easingCamelCase]) {
+    return easingFunctions[easingCamelCase];
+  }
+
+  // 如果 easing 是一个贝塞尔曲线函数，解析参数并返回一个贝塞尔曲线函数
+  if (easing.startsWith("cubic-bezier")) {
+    // 使用正则表达式解析参数
+    const match = easing.match(
+      /cubic-bezier\(([^,]+),([^,]+),([^,]+),([^,]+)\)/
+    );
+    if (match) {
+      const p1 = [+match[1], +match[2]];
+      const p2 = [+match[3], +match[4]];
+
+      // 检查参数是否都是有效的数字
+      if (p1.some(isNaN) || p2.some(isNaN)) {
+        throw new Error("Invalid arguments for cubic-bezier");
+      }
+
+      // 检查 x 值是否在 0 到 1 之间
+      if (p1[0] < 0 || p1[0] > 1 || p2[0] < 0 || p2[0] > 1) {
+        throw new Error(
+          "The x values of the control points must be between 0 and 1"
+        );
+      }
+      return function (progress) {
+        return calculateBezier(progress, p1, p2);
+      };
+    }
+  }
+
+  // 如果 easing 是未知的，返回默认的线性缓动函数
+  return easingFunctions.linear;
+}
 function hslToRgb(h, s, l) {
   let r, g, b;
 
@@ -292,9 +351,23 @@ function interpolateColor(startColor, endColor, progress) {
   return `hsla(${h * 360},${s * 100}%,${l * 100}%,${a})`;
 }
 
-const animate = function (options, startState, endState, updateFunc, easeFunc) {
-  if (typeof easeFunc === "string") {
-    easeFunc = easingFunctions[easeFunc];
+const animate = function (
+  options = {
+    delay: 0,
+    endDelay: 0,
+    fill: "auto",
+    iterationStart: 0,
+    duration: 0,
+    direction: "normal",
+    easing: "linear",
+    iterations: 1,
+  },
+  startState,
+  endState,
+  updateFunc
+) {
+  if (typeof options.easing === "string") {
+    options.easing = getEasingFunction(options.easing);
   }
   if (typeof options.duration !== "number" || options.duration <= 0) {
     throw new Error("Invalid duration");
@@ -302,17 +375,64 @@ const animate = function (options, startState, endState, updateFunc, easeFunc) {
   if (typeof updateFunc !== "function") {
     throw new Error("Invalid update function");
   }
-  if (typeof easeFunc !== "function") {
+  if (typeof options.easing !== "function") {
     throw new Error("Invalid easing function");
   }
+
   let cancelled = false;
-  const startTime = performance.now();
-  function animate() {
+  let startTime = performance.now();
+  let iterationCount = 1;
+
+  function animation() {
     if (cancelled) return;
 
     const elapsed = performance.now() - startTime;
-    let progress = Math.min(elapsed / options.duration, 1);
-    progress = easeFunc(progress);
+    let rawProgress = Math.min(elapsed / options.duration, 1);
+    let progress = rawProgress;
+    switch (options.direction) {
+      case "reverse":
+        progress = 1 - rawProgress;
+        break;
+      case "alternate":
+        if (iterationCount % 2 === 0) {
+          progress = 1 - rawProgress;
+        }
+        break;
+      case "alternate-reverse":
+        if (iterationCount % 2 === 1) {
+          progress = 1 - rawProgress;
+        }
+        break;
+      // 默认为 'normal'，无需修改 progress
+    }
+    progress = options.easing(progress);
+
+    // 处理动画的填充模式
+    switch (options.fill) {
+      case "none":
+        if (elapsed < 0 || elapsed > options.duration) {
+          progress = 0;
+        }
+        break;
+      case "forwards":
+        if (elapsed > options.duration) {
+          progress = 1;
+        }
+        break;
+      case "backwards":
+        if (elapsed < 0) {
+          progress = 0;
+        }
+        break;
+      case "both":
+        if (elapsed < 0) {
+          progress = 0;
+        } else if (elapsed > options.duration) {
+          progress = 1;
+        }
+        break;
+      // 默认无填充模式，无需修改 progress
+    }
 
     // 计算当前的值
     const currentValues = {};
@@ -332,12 +452,22 @@ const animate = function (options, startState, endState, updateFunc, easeFunc) {
     // 将当前的值传递给用户的 update 函数
     updateFunc(currentValues);
 
-    if (progress < 1) {
-      requestAnimationFrame(animate);
+    // 考虑是否继续下一帧动画
+    if (rawProgress < 1) {
+      requestAnimationFrame(animation);
+    } else {
+      if (
+        options.iterations === "Infinity" ||
+        options?.iterations > iterationCount
+      ) {
+        startTime = performance.now();
+        iterationCount++;
+        requestAnimationFrame(animation);
+      }
     }
   }
 
-  requestAnimationFrame(animate);
+  requestAnimationFrame(animation);
 
   return function cancel() {
     cancelled = true;
