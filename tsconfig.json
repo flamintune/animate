@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+      "target": "ES6",
+      "module": "ES2015",
+      "strict": true,
+      "esModuleInterop": true,
+      "outDir": ".",
+      "rootDir": "."
+    },
+    "include": [
+      "**/*.ts"
+    ],
+    "exclude": [
+      "node_modules"
+    ]
+  }
