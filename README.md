@@ -50,7 +50,11 @@ animate({iterations:'Infinity'},{opacity:0},{opacity:1},(currentValues)=>{
   目前暂时只实现了这些特性
 * @param startState 对象，存起始状态的值
 * @param endState 对象，存最终状态的值
-* @param UpdateFunc 更新函数，负责执行更新操作
+* @param UpdateFunc (currentState)=>{}更新函数，负责执行更新操作
 */ 
 animate(option,startState,endState,UpdateFunc)
 ```
+# Todo List
+- [ ] 写测试用例
+- [ ] 支持三个及以上的插值过程
+- [ ] TS类型完善
